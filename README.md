@@ -259,6 +259,8 @@ Le workflow `.github/workflows/ci.yml` s’exécute à chaque push et pull reque
 
 Les rapports Trivy sont publiés en artefacts de l’action. Pour désactiver l’échec sur CRITICAL, commenter ou adapter l’étape « Fail on CRITICAL vulnerabilities » dans le workflow.
 
+**Note (projet scolaire / TP)** : les identifiants utilisés en CI (mots de passe MongoDB, Mongo Express) sont en clair dans le workflow et ne sont pas stockés dans les GitHub Secrets ; c'est volontaire pour ce TP (environnement éphémère, valeurs factices). En production, utiliser les secrets.
+
 ---
 
 ## 13. Captures d'écran des résultats
