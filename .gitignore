@@ -3,3 +3,4 @@ ops/dev.env
 ops/mongo_password
 reports/*.txt
 reports/*.json
+.DS_Store
