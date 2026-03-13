@@ -1,0 +1,5 @@
+node_modules
+ops/dev.env
+ops/mongo_password
+reports/*.txt
+reports/*.json

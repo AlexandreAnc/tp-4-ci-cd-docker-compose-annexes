@@ -1,0 +1,31 @@
+services:
+  backend:
+    image: localhost:5001/todo-backend:1.0.0
+    ports:
+      - "3000:3000"
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 0
+
+  frontend:
+    image: localhost:5001/todo-frontend:1.0.0
+    ports:
+      - target: 80
+        published: 8082
+        protocol: tcp
+        mode: ingress
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: any

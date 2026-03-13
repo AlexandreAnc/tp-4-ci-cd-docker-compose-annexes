@@ -1,0 +1,129 @@
+# CI — Build, tests, scan Trivy et vérification de la stack
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test-and-scan:
+    name: Build, test & scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create ops/dev.env for CI
+        run: |
+          mkdir -p ops
+          cat << 'EOF' > ops/dev.env
+          MONGO_INITDB_ROOT_USERNAME=admin
+          MONGO_INITDB_ROOT_PASSWORD=supersafe
+          MONGO_INITDB_DATABASE=app
+          ME_CONFIG_BASICAUTH_USERNAME=admin
+          ME_CONFIG_BASICAUTH_PASSWORD=admin
+          MONGODB_URI=mongodb://admin:supersafe@mongodb:27017/app?authSource=admin
+          EOF
+
+      - name: Build backend image
+        run: docker build -t todo-backend:latest ./backend
+
+      - name: Build frontend image
+        run: docker build -t todo-frontend:latest ./frontend
+
+      - name: Run backend tests
+        run: |
+          docker build -t todo-backend:test --target builder ./backend
+          docker run --rm todo-backend:test npm test
+
+      - name: Install Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          trivy_version: 'latest'
+
+      - name: Run Trivy scan (backend)
+        run: |
+          mkdir -p reports
+          trivy image \
+            --format table \
+            --output reports/todo-backend-trivy.txt \
+            --exit-code 0 \
+            todo-backend:latest
+          trivy image \
+            --format cyclonedx \
+            --output reports/todo-backend-bom.json \
+            todo-backend:latest
+
+      - name: Run Trivy scan (frontend)
+        run: |
+          trivy image \
+            --format table \
+            --output reports/todo-frontend-trivy.txt \
+            --exit-code 0 \
+            todo-frontend:latest
+          trivy image \
+            --format cyclonedx \
+            --output reports/todo-frontend-bom.json \
+            todo-frontend:latest
+
+      - name: Fail on CRITICAL vulnerabilities
+        run: |
+          echo "=== Échec si vulnérabilités CRITICAL ==="
+          trivy image --severity CRITICAL --exit-code 1 todo-backend:latest
+          trivy image --severity CRITICAL --exit-code 1 todo-frontend:latest
+
+      - name: Upload Trivy reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-reports
+          path: reports/
+
+  stack-smoke:
+    name: Stack smoke test
+    runs-on: ubuntu-latest
+    needs: test-and-scan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create ops/dev.env for CI
+        run: |
+          mkdir -p ops
+          cat << 'EOF' > ops/dev.env
+          MONGO_INITDB_ROOT_USERNAME=admin
+          MONGO_INITDB_ROOT_PASSWORD=supersafe
+          MONGO_INITDB_DATABASE=app
+          ME_CONFIG_BASICAUTH_USERNAME=admin
+          ME_CONFIG_BASICAUTH_PASSWORD=admin
+          MONGODB_URI=mongodb://admin:supersafe@mongodb:27017/app?authSource=admin
+          EOF
+
+      - name: Start stack
+        run: |
+          docker compose up -d --build
+          echo "Waiting for services..."
+          sleep 30
+
+      - name: Check backend health
+        run: |
+          curl -sf http://localhost:3000/api/message || (docker compose logs backend; exit 1)
+
+      - name: Check frontend
+        run: |
+          curl -sf -o /dev/null http://localhost:8082/ || (docker compose logs frontend; exit 1)
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down --remove-orphans -v

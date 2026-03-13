@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Frontend Docker</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, sans-serif; max-width: 500px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+        .form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .form input { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ccc; border-radius: 6px; }
+        .form button { padding: 0.5rem 1rem; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        .form button:hover { background: #1d4ed8; }
+        .history { list-style: none; padding: 0; margin: 0; }
+        .history li { padding: 0.6rem 0.75rem; background: #f1f5f9; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .history .text { flex: 1; word-break: break-word; }
+        .history .date { font-size: 0.75rem; color: #64748b; white-space: nowrap; }
+        .empty { color: #64748b; font-style: italic; padding: 1rem 0; }
+        .error { color: #dc2626; padding: 0.5rem 0; }
+    </style>
+</head>
+<body>
+
+<h1>Messages</h1>
+
+<form class="form" id="form">
+    <input type="text" id="input" placeholder="Écris un message..." autocomplete="off" required>
+    <button type="submit">Envoyer</button>
+</form>
+
+<ul class="history" id="history"></ul>
+<p class="error" id="error" hidden></p>
+
+<script>
+    const API = "http://localhost:3000/api/message";
+    const historyEl = document.getElementById("history");
+    const formEl = document.getElementById("form");
+    const inputEl = document.getElementById("input");
+    const errorEl = document.getElementById("error");
+
+    function formatDate(dateStr) {
+        const d = new Date(dateStr);
+        return d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+    }
+
+    function renderMessages(messages) {
+        errorEl.hidden = true;
+        if (!messages || messages.length === 0) {
+            historyEl.innerHTML = '<li class="empty">Aucun message. Envoie le premier !</li>';
+            return;
+        }
+        historyEl.innerHTML = messages.map(m => `
+            <li>
+                <span class="text">${escapeHtml(m.text)}</span>
+                <span class="date">${formatDate(m.createdAt)}</span>
+            </li>
+        `).join("");
+    }
+
+    function escapeHtml(s) {
+        const div = document.createElement("div");
+        div.textContent = s;
+        return div.innerHTML;
+    }
+
+    function showError(msg) {
+        errorEl.textContent = msg;
+        errorEl.hidden = false;
+    }
+
+    function loadHistory() {
+        fetch(API)
+            .then(res => res.json())
+            .then(data => {
+                renderMessages(data.messages || []);
+            })
+            .catch(() => showError("Impossible de charger l'historique."));
+    }
+
+    formEl.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = inputEl.value.trim();
+        if (!text) return;
+
+        fetch(API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text })
+        })
+            .then(res => res.json())
+            .then((data) => {
+                inputEl.value = "";
+                loadHistory();
+            })
+            .catch(() => showError("Impossible d'envoyer le message."));
+    });
+
+    loadHistory();
+</script>
+
+</body>
+</html>
